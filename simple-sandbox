@@ -1,0 +1,67 @@
+#!/bin/sh
+
+# A Fork of <https://wiki.gentoo.org/wiki/Simple_sandbox>
+
+# Author:       Ahmed Elhori <dev@elhori.com>
+# License:      GNU GPLv3
+# Description:  A simple sandbox for every application
+
+# ENV
+NAME="$(basename $0)"
+
+# Check input
+if [ "$#" -ne '3' ]; then
+	echo "$NAME - Usage: '# simple-sandbox <package_name> <sandbox_user> <user>'."
+	exit 1
+fi
+
+# Check root privileges
+if [ "$(id -u)" -ne '0' ]; then
+	echo "$NAME - Error: Please run as root."
+	exit 1
+fi
+
+# Prepare variables
+pkg="$1"
+sandbox_user="$2"
+user="$3"
+
+# Check package available
+if ! which "$pkg" >/dev/null 2>&1; then
+	echo "$NAME - Error: $pkg not found."
+	exit 1
+fi
+
+# Create sandbox user
+useradd --create-home --shell '/bin/false' "$sandbox_user"
+
+# Sudo users uncomment:
+echo "$user ALL=($sandbox_user) NOPASSWD: ALL" > /etc/sudoers.d/"$sandbox_user"
+# Doas users uncomment:
+# echo "permit nopass $user as $Simple_sandbox" >> /etc/doas.conf
+
+# Change group and permissions of sandboxed user's files
+chgrp -R "$user" /home/"$sandbox_user"
+chmod -R 770 /home/"$sandbox_user"
+
+cat <<- EOF > ./hardend-"$pkg"
+	#!/bin/sh
+
+	xhost si:localuser:$sandbox_user && sudo -u $sandbox_user $pkg \$@
+EOF
+
+# Ask if the user should be added to the sandboxed application's group
+while ! printf "$answer" | grep -q '[Yy]\(es\)\?\|[Nn]o\?'; do
+	printf "Add $user to $sandbox_user group? (Y)es/(N)o: "
+	read answer
+done
+
+if printf "$answer" | grep -q '[Yy]\(es\)\?'; then
+	usermod -aG "$sandbox_user" "$user"
+fi
+
+# Make it executable
+chown "$user":"$user" hardend-"$pkg"
+chmod 700 ./hardend-"$pkg"
+
+echo "$NAME: Done."
