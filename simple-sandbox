@@ -50,16 +50,6 @@ cat <<- EOF > ./hardend-"$pkg"
 	xhost si:localuser:$sandbox_user && sudo -u $sandbox_user $pkg \$@
 EOF
 
-# Ask if the user should be added to the sandboxed application's group
-while ! printf "$answer" | grep -q '[Yy]\(es\)\?\|[Nn]o\?'; do
-	printf "Add $user to $sandbox_user group? (Y)es/(N)o: "
-	read answer
-done
-
-if printf "$answer" | grep -q '[Yy]\(es\)\?'; then
-	usermod -aG "$sandbox_user" "$user"
-fi
-
 # Make it executable
 chown "$user":"$user" hardend-"$pkg"
 chmod 700 ./hardend-"$pkg"
