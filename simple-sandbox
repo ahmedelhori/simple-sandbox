@@ -50,6 +50,13 @@ cat <<- EOF > ./hardend-"$pkg"
 	xhost si:localuser:$sandbox_user && sudo -u $sandbox_user $pkg \$@
 EOF
 
+mkdir -p /home/"$user"/.config/pulse
+mkdir -p /home/"$sandbox_user"/.config/pulse
+printf '.include /etc/pulse/default.pa\nload-module module-native-protocol-unix auth-anonymous=1 socket=/tmp/pulse-socket' > /home/"$user"/.config/pulse/default.pa
+printf 'default-server = unix:/tmp/pulse-socket' > /home/"$sandbox_user"/.config/pulse/client.conf
+chown -R "$user":"$user" /home/"$user"
+chown -R "$sandbox_user":"$sandbox_user" /home/"$sandbox_user"
+
 # Make it executable
 chown "$user":"$user" hardend-"$pkg"
 chmod 700 ./hardend-"$pkg"
