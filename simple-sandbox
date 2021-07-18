@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# A Fork of <https://wiki.gentoo.org/wiki/Simple_sandbox>
+# Inspired by <https://wiki.gentoo.org/wiki/Simple_sandbox>
 
 # Author:       Ahmed Elhori <dev@elhori.com>
 # License:      GNU GPLv3
