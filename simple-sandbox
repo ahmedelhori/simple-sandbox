@@ -7,58 +7,84 @@
 # Description:  A simple sandbox for every application
 
 # ENV
-NAME="$(basename $0)"
-
-# Check input
-if [ "$#" -ne '3' ]; then
-	echo "$NAME - Usage: '# simple-sandbox <package_name> <sandbox_user> <user>'."
-	exit 1
-fi
-
-# Check root privileges
-if [ "$(id -u)" -ne '0' ]; then
-	echo "$NAME - Error: Please run as root."
-	exit 1
-fi
-
-# Prepare variables
-pkg="$1"
+set -e
+NAME="$(basename "$0")"
+pkg_name="$1"
 sandbox_user="$2"
-user="$3"
+main_user="$3"
 
-# Check package available
-if ! which "$pkg" >/dev/null 2>&1; then
-	echo "$NAME - Error: $pkg not found."
-	exit 1
-fi
+print_error(){
+	message="$1"
+	echo "${NAME} - Error: ${message}" >&2
+}
 
-# Create sandbox user
-useradd --create-home --shell '/bin/false' "$sandbox_user"
+check_input(){
+	if [ "$#" -ne '3' ]; then
+		print_error "Usage: '# simple-sandbox <package_name> <sandbox_user> <main_user>'."
+		return 1
+	fi
+}
 
-# Sudo users uncomment:
-echo "$user ALL=($sandbox_user) NOPASSWD: ALL" > /etc/sudoers.d/"$sandbox_user"
-# Doas users uncomment:
-# echo "permit nopass $user as $Simple_sandbox" >> /etc/doas.conf
+check_root(){
+	if [ "$(id -u)" -ne '0' ]; then
+		print_error 'Please run as root.'
+		return 1
+	fi
+}
 
-# Change group and permissions of sandboxed user's files
-chgrp -R "$user" /home/"$sandbox_user"
-chmod -R 770 /home/"$sandbox_user"
+check_package_available(){
+	if ! command -v "$pkg_name" >/dev/null 2>&1; then
+		print_error "$pkg_name not found."
+		return 1
+	fi
+}
 
-cat <<- EOF > ./hardend-"$pkg"
-	#!/bin/sh
+create_sandbox_user(){
+	useradd --create-home --shell '/bin/false' "$sandbox_user"
+}
 
-	xhost si:localuser:$sandbox_user && sudo -u $sandbox_user $pkg \$@
-EOF
+generate_sudoers(){
+	echo "${main_user} ALL=(${sandbox_user}) NOPASSWD: ALL" > /etc/sudoers.d/"$sandbox_user"
+}
 
-mkdir -p /home/"$user"/.config/pulse
-mkdir -p /home/"$sandbox_user"/.config/pulse
-printf '.include /etc/pulse/default.pa\nload-module module-native-protocol-unix auth-anonymous=1 socket=/tmp/pulse-socket' > /home/"$user"/.config/pulse/default.pa
-printf 'default-server = unix:/tmp/pulse-socket' > /home/"$sandbox_user"/.config/pulse/client.conf
-chown -R "$user":"$user" /home/"$user"
-chown -R "$sandbox_user":"$sandbox_user" /home/"$sandbox_user"
+create_executable(){
+	cat <<- EOF > /usr/local/bin/hardend-"$pkg_name"
+		#!/bin/sh
 
-# Make it executable
-chown "$user":"$user" hardend-"$pkg"
-chmod 700 ./hardend-"$pkg"
+		xhost si:localuser:$sandbox_user && sudo -u $sandbox_user $pkg_name \$@
+	EOF
 
-echo "$NAME: Done."
+	chown "$main_user":"$main_user" /usr/local/bin/hardend-"$pkg_name"
+	chmod 700 /usr/local/bin/hardend-"$pkg_name"
+}
+
+config_audio(){
+	mkdir -p /home/"$main_user"/.config/pulse
+	mkdir -p /home/"$sandbox_user"/.config/pulse
+	printf '.include /etc/pulse/default.pa\nload-module module-native-protocol-unix auth-anonymous=1 socket=/tmp/pulse-socket' > /home/"$main_user"/.config/pulse/default.pa
+	printf 'default-server = unix:/tmp/pulse-socket' > /home/"$sandbox_user"/.config/pulse/client.conf
+}
+
+change_permissions(){
+	chown -R "$sandbox_user":"$main_user" /home/"$sandbox_user"
+	find /home/"$sandbox_user" -type d -exec chmod -R g+rx {} \;
+	find /home/"$sandbox_user" -type f -exec chmod -R g+r {} \;
+}
+
+print_finish(){
+	echo "Run using: hardend-${pkg_name}"
+}
+
+main(){
+	check_input "$@"
+	check_root
+	check_package_available
+	create_sandbox_user
+	generate_sudoers
+	create_executable
+	config_audio
+	change_permissions
+	print_finish
+}
+
+main "$@"
