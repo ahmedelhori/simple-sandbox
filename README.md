@@ -3,5 +3,5 @@ A simple sandbox for every application
 
 # Example
 ```
-# ./simple-sandbox firefox ff myuser
+# ./simple-sandbox firefox hardend-firefox ff myuser
 ```
